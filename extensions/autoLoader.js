@@ -1,8 +1,8 @@
 System.autoLoad = (name, deps, fn) => {
     deps = deps || [];
     deps = deps.map(n => System.normalizeSync(n, name));
-    var loadedModules = [];
-    var mustWait = deps.some(mName => {
+    const loadedModules = [];
+    let mustWait = deps.some(mName => {
         const m = System.get(mName);
         if (!m) {
             mustWait = true;
@@ -43,7 +43,7 @@ System.autoLoad = (name, deps, fn) => {
         const newModule = System.newModule(exports);
         System.set(name, newModule);
         return Promise.resolve(newModule);
-    } catch(err) {
+    } catch (err) {
         console.error(err);
         return Promise.reject(err);
     }

@@ -1,11 +1,11 @@
 // Keep reference to original SystemJS methods
 const {
-    normalize: originalNormalize,
-    normalizeSync: originalNormalizeSync,
-    'import': originalImport
-    } = System;
+    normalize: _normalize,
+    normalizeSync: _normalizeSync,
+    'import': _import
+} = System;
 
-// Configure SystemJS to support our modules
+// Configure SystemJS to use our module loader
 System.config({
     meta: {
         '/_modules_/*': {
@@ -23,61 +23,65 @@ const normalizedRegex = /^\/_modules_\//;
 const assetsRegex = /^\/packages\//;
 const selectedPlatformRegex = /@(client|server)$/;
 const endsWithSlashRegex = /\/$/;
-const endsWithImportRegex = /\.import$/;
+const endsWithImportRegex = /import$\//;
 
+/* Add default error reporting to System.import */
 
 /**
  * Convert Meteor-like friendly module name to real module name.
+ *
+ * @no
  * The `/_modules_/packages/abc/xyz/` syntax in an internal implementation that is subject to change!
  * You should never rely on it!
- * @param {string} name - friendly module name with Meteor package syntax
+ *
+ *
+ * @param {string} moduleName - friendly module name with Meteor package syntax
  * @param {string} [parentName] - normalized calling module name
- * @returns {string} - real module name
+ * @returns {string} - real(world) moduleName to be computed
  */
-const normalizeModuleName = function normalizeModuleName (name, parentName) {
+function normalizeModuleName(moduleName, parentName) {
+    moduleName = moduleName.replace(endsWithImportRegex, ''); // support for filemoduleName.import syntax (required for TypeScript support)
 
-    name = name.replace(endsWithImportRegex, ''); // support for filename.import syntax (required for TypeScript support)
-
-    if (name.charAt(0) === '/') {
+    if (moduleName.charAt(0) === '/') {
         // absolute path
 
-        if (normalizedRegex.test(name) || assetsRegex.test(name)) {
-            // already normalized name or meteor asset, leave it as is
-            return name;
+        if (normalizedRegex.test(moduleName) || assetsRegex.test(moduleName)) {
+            // already normalized moduleName or meteor asset, leave it as is
+            return moduleName;
         }
 
-        name = name.replace(endsWithSlashRegex, '/index'); // if name is a directory then load index module
+        moduleName = moduleName.replace(endsWithSlashRegex, '/index'); // if moduleName is a directory then load index module
 
         if (parentName) {
 
             let [, dir, type, author, packageName] = parentName.split('/');
 
             if (dir !== '_modules_') {
-                // invalid parent name, not our module!
-                throw new Error(`[Universe Modules]: Invalid parent while loading module from absolute path: ${name} - ${parentName}`);
+                // invalid parent moduleName, not our module!
+                throw new Error(`[Universe Modules]: Invalid parent while loading module from absolute path: ${moduleName} - ${parentName}`);
             }
 
             if (type === 'app') {
                 // inside app
-                return '/_modules_/app' + name;
+                return '/_modules_/app' + moduleName;
             } else if (type === 'packages') {
                 // inside a package
-                return `/_modules_/packages/${author}/${packageName}${name}`;
+                return `/_modules_/packages/${author}/${packageName}${moduleName}`;
             }
 
             // invalid type
-            throw new Error(`[Universe Modules]: Cannot determine parent when loading module from absolute path: ${name} - ${parentName}`);
+            throw new Error(`[Universe Modules]: Cannot determine parent when loading module from absolute path: ${moduleName} - ${parentName}`);
 
         } else {
             // no parent provided, treat it as an app module, default behaviour
-            return '/_modules_/app' + name;
+            return '/_modules_/app' + moduleName;
 
         }
 
-    } else if (name.charAt(0) === '{') {
+    } else if (moduleName.charAt(0) === '{') {
         // Meteor syntax
 
-        return name
+        return moduleName
             // main app file
             .replace(appRegex, '/_modules_/app/') // {}/foo -> /_modules_/app/foo
 
@@ -92,41 +96,59 @@ const normalizeModuleName = function normalizeModuleName (name, parentName) {
 
     } else {
         // Other syntax, maybe relative path, leave it as is
-        return name;
+
+        return moduleName;
     }
-};
+}
 
-
-/* Add default error reporting to System.import */
 //System.import = function (...args) {
-//    return originalImport.call(this, ...args).catch(console.error.bind(console));
+//    return _import.call(this, ...args).catch(console.error.bind(console));
 //};
 
-/*
- * Overwrite SystemJS normalize with our method
+/**
+ * Hijacks the default SystemJS normalize function to extend support for relatively imported modules without the ugly `./myfile` explicit syntax
  *
- * normalize : (string, NormalizedModuleName, ModuleAddress) -> Promise<stringable>
+ * @description
+ * Normalize helps `SystemJS` convert a terse, pretty import syntax into whats needed behind the scenes.
  *
- * name: the unnormalized module name
- * parentName: the canonical module name for the requesting module
- * parentAddress: the address of the requesting module
+ * @override
+ * @name normalize
+ * @param {String} moduleName - id of module to be resolved
+ * @param {String} [parentName=''] - the string representation for the canonical moduleName requesting module
+ * @param {String} [parentAddress=''] -  the address of the _requesting_ module (should be same as `parentName`)
+ * @returns {Promise|String} the string representation for the normalized/canonical `moduleName` if it exists, otherwise a Promise for resolution upon import resolution.
  */
-System.normalize = function (name, parentName, parentAddress) {
-    if (selectedPlatformRegex.test(name)) {
-        // load module only on selected platform
-        let [, platform] = selectedPlatformRegex.exec(name);
 
+System.normalize = function(moduleName, parentName, parentAddress) {
+    if (selectedPlatformRegex.test(moduleName)) {
+        // if specified, load module only on selected platform
+        const [root, platform] = selectedPlatformRegex.exec(moduleName);
+        // do given platforms match the current environment?
         if ((Meteor.isServer && platform === 'server') || (Meteor.isClient && platform === 'client')) {
             // correct platform
-            name = name.replace(selectedPlatformRegex, '');
+            moduleName = moduleName.replace(selectedPlatformRegex, '');
         } else {
-            // wrong platform, return empty module
+            // wrong platform, return empty module to trigger error
             return 'emptyModule';
         }
-
+    }
+    // compute best guess for the normalized moduleName
+    const val = normalizeModuleName(moduleName, parentName);
+    console.log(`brormalizing: ${moduleName} \r\n\tnormalized:${val}\r\n\tparentz:${parentName}\r\n\tparentza:${parentAddress}`);
+    // Let's check the initial pass, see if import was actually resolved
+    if (val.lastIndexOf(`/_modules_/`) === 0) return val;
+    else if (parentName && (moduleName.indexOf('./') !== 0 && moduleName.indexOf('../') !== 0)) {
+        const splitRelPath = parentName; //.substr(2); // chop off first `./`
+        const newPath = parentName.split('/').slice(0, -1).join('/');
+        return newPath + splitRelPath;
     }
 
-    return originalNormalize.call(this, normalizeModuleName(name, parentName), parentName, parentAddress);
+    return Promise.resolve(
+        _normalize.call(this, val, parentName, parentAddress)
+    ).then((cName, cParentName, cParentAddress) => {
+        console.log(`\t${val} \t\t===> ${cName}`, val, cName, cParentName, cParentAddress);
+        return cName;
+    });
 };
 
 /*
@@ -135,14 +157,24 @@ System.normalize = function (name, parentName, parentAddress) {
  * name: the unnormalized module name
  * parentName: the canonical module name for the requesting module
  */
-System.normalizeSync = function (name, parentName) {
-    return originalNormalizeSync.call(this, normalizeModuleName(name, parentName), parentName);
+System.normalizeSync = function(moduleName, parentName) {
+    const val = normalizeModuleName(moduleName, parentName);
+    console.log(`normalizing:\t${moduleName} ==> ${val}`, parentName);
+    if (val.lastIndexOf(`/_modules_/`) === 0) return val;
+
+    console.log('\t' + val);
+    return Promise.resolve(
+        _normalizeSync.call(this, val, parentName)
+    ).then((cName, cParentName) => {
+        console.log('\t\t--\t', val, cName, cParentName);
+        return cName;
+    });
 };
 
 
 // Our custom loader
-/* globals UniverseModulesLoader:true */
 UniverseModulesLoader = System.newModule({
+
     /*
      * locate : ({ name: NormalizedModuleName,
      *             metadata: object })
@@ -152,7 +184,12 @@ UniverseModulesLoader = System.newModule({
      * load.metadata a metadata object that can be used to store
      *   derived metadata for reference in other hooks
      */
-    //locate (load) {},
+    locate(load) {
+        setTimeout(() => console.log('captured locate request: ', load), 12);
+        // Fetch will only occur when there is no such module.
+        // Because we do not support lazy loading yet, this means that module name is invalid.
+        return Promise.reject(`[Universe Modules]: Trying to load module "${load.name.replace(/\/_modules_\/[^\/]*/, '')}" that doesn't exist!`);
+    },
 
     /*
      * fetch : ({ name: NormalizedModuleName,
@@ -164,7 +201,9 @@ UniverseModulesLoader = System.newModule({
      * load.address: the URL returned from locate
      * load.metadata: the same metadata object by reference, which can be modified
      */
-    fetch (load) {
+    /* globals UniverseModulesLoader:true */
+    fetch(load) {
+        setTimeout(() => console.log('captured fetch request: ', load), 12);
         // Fetch will only occur when there is no such module.
         // Because we do not support lazy loading yet, this means that module name is invalid.
         return Promise.reject(`[Universe Modules]: Trying to load module "${load.name.replace(/\/_modules_\/[^\/]*/, '')}" that doesn't exist!`);

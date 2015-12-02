@@ -5,7 +5,7 @@
  */
 
 System.set('exports', System.newModule({
-    locate ({name, metadata}) {
+    locate({name, metadata}) {
         return new Promise((resolve, reject) => {
             let [, dir,, author, packageName] = name.split('/');
 
@@ -29,11 +29,11 @@ System.set('exports', System.newModule({
             resolve(name);
         });
     },
-    fetch () {
+    fetch() {
         // we don't need to fetch anything for this to work
         return '';
     },
-    instantiate ({metadata}) {
+    instantiate({metadata}) {
         return Package[metadata.meteorPackageName];
     }
 }));

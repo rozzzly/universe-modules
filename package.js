@@ -12,7 +12,7 @@ Package.registerBuildPlugin({
     sources: ['plugin.js']
 });
 
-Package.onUse(function (api) {
+Package.onUse(function(api) {
     api.versionsFrom('1.2.0.2');
 
     // Write ES2015 code inside package itself
@@ -41,6 +41,6 @@ Package.onUse(function (api) {
 
 });
 
-Package.onTest(function (api) {
+Package.onTest(function(api) {
     // @todo: Write some tests
 });

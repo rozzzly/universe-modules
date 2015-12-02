@@ -1,6 +1,6 @@
 Plugin.registerCompiler({
     extensions: ['import.js', 'import.jsx'],
     filenames: []
-}, function () {
+}, function() {
     return new UniverseModulesCompiler();
 });
