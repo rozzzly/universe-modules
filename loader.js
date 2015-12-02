@@ -108,7 +108,6 @@ function normalizeModuleName(moduleName, parentName) {
 /**
  * Hijacks the default SystemJS normalize function to extend support for relatively imported modules without the ugly `./myfile` explicit syntax
  *
- * @description
  * Normalize helps `SystemJS` convert a terse, pretty import syntax into whats needed behind the scenes.
  *
  * @override
@@ -134,13 +133,26 @@ System.normalize = function(moduleName, parentName, parentAddress) {
     }
     // compute best guess for the normalized moduleName
     const val = normalizeModuleName(moduleName, parentName);
-    console.log(`brormalizing: ${moduleName} \r\n\tnormalized:${val}\r\n\tparentz:${parentName}\r\n\tparentza:${parentAddress}`);
+    console.log(`brormalizing: ${moduleName} \r\n\tnormalized: ${val}\r\n\tparentz: ${parentName}\r\n\tparentza: ${parentAddress}`);
     // Let's check the initial pass, see if import was actually resolved
     if (val.lastIndexOf(`/_modules_/`) === 0) return val;
-    else if (parentName && (moduleName.indexOf('./') !== 0 && moduleName.indexOf('../') !== 0)) {
-        const splitRelPath = parentName; //.substr(2); // chop off first `./`
-        const newPath = parentName.split('/').slice(0, -1).join('/');
-        return newPath + splitRelPath;
+    else if (parentName && !System.has(val)) {
+        let transformedPath = parentName;
+        let transformedName = moduleName;
+        transformedPath = transformedPath.split('/').slice(0, -1).join('/'); // chop off last folder
+
+        if (transformedName.indexOf('./', 0) === 0) {
+            transformedName = transformedName.slice(2); // slice off leading ./
+        }
+
+        while (transformedName.indexOf('../', 0) === 0) {
+            transformedPath = transformedPath.split('/').slice(0, -1).join('/'); //  chop last folder off of path
+            transformedName = transformedName.slice(3); // slice off leading ../
+        }
+
+        const result = transformedPath + '/' + transformedName;
+        console.log(`\t\t${result}`);
+        return result;
     }
 
     return Promise.resolve(

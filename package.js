@@ -1,5 +1,5 @@
 Package.describe({
-    name: 'universe:modules',
+    name: 'universe:modules-broken',
     version: '0.6.7',
     summary: 'Use ES6 / ES2015 modules in Meteor with SystemJS!',
     git: 'https://github.com/vazco/universe-modules',
