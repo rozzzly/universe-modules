@@ -1,3 +1,6 @@
+## This has been abandoned 
+### _(for the time being)_ dont try to use this its a mess, but imma archive it here in the interwebs so me/some unlucky soul can look at it again someday
+
 <a href="http://unicms.io"><img src="http://unicms.io/banners/standalone.png" /></a>
 
 # Universe Modules
